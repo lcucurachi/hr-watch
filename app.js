@@ -152,6 +152,7 @@ function applySetting(key) {
       // the checkbox click counts as a tap, so the browser allows starting the sound here
       if (settings.keepAlive && (live || state.conn === 'reconnecting')) startKeepAlive();
       else stopKeepAlive();
+      renderKeepAliveBadge();
       break;
     case 'saveLocal':
       if (settings.saveLocal) saveWholeSession();
@@ -309,7 +310,7 @@ let demoT = 0;
 
 function startDemo() {
   if (state.conn !== 'idle') return;
-  resetSession();
+  resetSession({ keepSaved: true }); // demo never deletes a saved real session
   state.stats.start = Date.now();
   setConn('demo', 'Demo mode — simulated data');
   demoTimer = setInterval(() => {
@@ -362,7 +363,8 @@ function addReading(hr, rrList, contact) {
   requestDraw();
 }
 
-function resetSession() {
+/** Clear the live session. keepSaved: leave the copy saved in the browser alone (used by Demo). */
+function resetSession({ keepSaved = false } = {}) {
   state.samples = [];
   state.rr = [];
   state.lastSampleAt = 0;
@@ -370,10 +372,10 @@ function resetSession() {
   state.zoneTime = [0, 0, 0, 0, 0, 0];
   state.restored = false;
   if (state.conn === 'connected' || state.conn === 'demo') state.stats.start = Date.now();
-  // forget the saved copy too
   unsaved.samples = [];
   unsaved.rr = [];
-  sessionStore.clear().catch((e) => console.warn('Could not clear saved session', e));
+  // forget the saved copy too (except for Demo, so it can't wipe a real session)
+  if (!keepSaved) sessionStore.clear().catch((e) => console.warn('Could not clear saved session', e));
   renderLive();
   requestDraw();
 }
@@ -432,14 +434,16 @@ function recomputeStats(start) {
 }
 
 function canResumeRestored() {
+  const age = Date.now() - state.lastSampleAt; // negative = timestamp in the future (e.g. clock changed)
   return state.restored && state.samples.length > 0
-    && Date.now() - state.lastSampleAt < settings.resumeMin * 60 * 1000;
+    && age >= 0 && age < settings.resumeMin * 60 * 1000;
 }
 
 async function restoreSession() {
   try {
     const saved = await sessionStore.load();
-    if (!saved || state.samples.length) return; // nothing saved, or already recording
+    // nothing saved, or the user already started something (Demo/Connect) while this was loading
+    if (!saved || state.samples.length || state.conn !== 'idle') return;
     // check saved data like an imported file: other pages on the same site share this storage
     const samples = cleanSamples(saved.samples);
     if (!samples.length) return;
@@ -480,7 +484,12 @@ function setConn(conn, text) {
   els.demoBtn.textContent = conn === 'demo' ? 'Stop demo' : 'Demo';
   els.demoBtn.classList.toggle('active', conn === 'demo');
   els.demoBtn.disabled = bleActive;
-  if (conn === 'idle') stopKeepAlive(); // not recording any more (disconnect, demo stopped, picker closed…)
+  if (conn === 'idle') {
+    // not recording any more (disconnect, demo stopped, picker closed…)
+    stopKeepAlive();
+    releaseWakeLock(); // let the screen sleep again
+  }
+  renderKeepAliveBadge();
   renderLive();
 }
 
@@ -905,8 +914,21 @@ function makeKeepAliveTone() {
   return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
 }
 
+/**
+ * ♪ badge next to the status: "keep-alive" while the tone plays; "paused, tap to resume" if it was
+ * paused while still recording (e.g. from the phone's media controls), so it doesn't stop silently.
+ */
 function renderKeepAliveBadge() {
-  els.keepAliveBadge.hidden = !(keepAliveAudio && !keepAliveAudio.paused);
+  const recording = ['connected', 'demo', 'reconnecting'].includes(state.conn);
+  const playing = !!(keepAliveAudio && !keepAliveAudio.paused);
+  const pausedWhileRecording = settings.keepAlive && recording && !!keepAliveAudio && !playing;
+  const badge = els.keepAliveBadge;
+  badge.hidden = !(playing || pausedWhileRecording);
+  badge.classList.toggle('paused', !playing);
+  badge.textContent = playing ? '♪ keep-alive' : '♪ paused, tap to resume';
+  badge.dataset.tip = playing
+    ? 'Background keep-alive is on (experimental, see Settings).'
+    : 'Background keep-alive was paused, so recording may stop when you switch apps. Tap to resume.';
 }
 
 /** Start the tone. Must be called right after a tap/click, or the browser blocks the sound. */
@@ -920,10 +942,16 @@ function startKeepAlive() {
   }
   keepAliveAudio.play()
     .then(() => {
+      if (!('mediaSession' in navigator)) return;
       // name shown in the phone's media notification / lock screen
-      if ('mediaSession' in navigator && 'MediaMetadata' in window) {
+      if ('MediaMetadata' in window) {
         navigator.mediaSession.metadata = new MediaMetadata({ title: 'HR Watch', artist: 'Recording heart rate' });
       }
+      // ▶ / ⏸ in the phone's media controls: pause shows the "paused" badge, play resumes
+      try {
+        navigator.mediaSession.setActionHandler('play', () => startKeepAlive());
+        navigator.mediaSession.setActionHandler('pause', () => stopKeepAlive());
+      } catch { /* some browsers don't support these actions */ }
     })
     .catch((e) => console.warn('Keep-alive sound was blocked', e));
 }
@@ -970,7 +998,10 @@ els.demoBtn.addEventListener('click', () => {
   else { startDemo(); requestWakeLock(); startKeepAlive(); }
 });
 
-els.resetBtn.addEventListener('click', resetSession);
+els.resetBtn.addEventListener('click', () => resetSession());
+
+// tapping the "♪ paused, tap to resume" badge restarts the keep-alive tone (a tap is needed to play sound)
+els.keepAliveBadge.addEventListener('click', () => startKeepAlive());
 
 /* ------------------------------------------------------ settings panel */
 

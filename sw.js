@@ -8,6 +8,9 @@
      and its stored files. There is still only one place to change.
    - The page itself is fetched from the network first when online, so a new
      release shows up right away; the stored copy is only used offline.
+   - The stored page is saved only when this version installs, and only if it
+     really is this version, so it always matches the stored scripts. Browsing
+     never overwrites it (e.g. opening an image of the site directly).
    - Other projects on the same github.io site share the browser's file
      storage, so every store is named "hrwatch-…" and cleanup only ever
      touches stores with that prefix.
@@ -17,9 +20,8 @@ const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
 const PREFIX = 'hrwatch-';
 const CACHE = `${PREFIX}${VERSION}`;
 
-// everything the app needs to start offline (scripts/CSS use the same ?v= as index.html)
-const FILES = [
-  './',
+// everything besides the page that the app needs offline (scripts/CSS use the same ?v= as index.html)
+const ASSETS = [
   `style.css?v=${VERSION}`,
   ...['storage.js', 'app.js', 'explore.js', 'tooltip.js', 'help.js'].map((f) => `${f}?v=${VERSION}`),
   'manifest.webmanifest',
@@ -29,13 +31,23 @@ const FILES = [
   'icons/apple-touch-icon.png',
 ];
 
-// download this version's files
+// download this version's page and files
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE)
-      .then((cache) => cache.addAll(FILES.map((f) => new Request(f, { cache: 'reload' }))))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    // The page must be this same version, or the offline copy would ask for scripts this
+    // store doesn't have. Right after a push GitHub Pages can briefly serve the old page;
+    // then installing fails and the browser simply tries again on the next visit.
+    const page = await fetch('./', { cache: 'reload' });
+    if (!page.ok) throw new Error(`page: HTTP ${page.status}`);
+    const html = await page.clone().text();
+    if (VERSION !== 'dev' && !html.includes(`APP_VERSION = '${VERSION}'`)) {
+      throw new Error(`the page isn't version ${VERSION} yet, will retry later`);
+    }
+    await cache.put('./', page);
+    await cache.addAll(ASSETS.map((f) => new Request(f, { cache: 'reload' })));
+    await self.skipWaiting();
+  })());
 });
 
 // remove older HR Watch versions (never another app's stores)
@@ -56,16 +68,10 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || url.origin !== self.location.origin || !url.href.startsWith(self.registration.scope)) return;
 
   if (req.mode === 'navigate') {
-    // the page: newest from the network (bypassing the browser's HTTP cache), stored copy when offline
+    // the page: newest from the network (bypassing the browser's HTTP cache), stored copy when offline.
+    // Nothing is written here: the stored page only changes when a new version installs.
     event.respondWith(
       fetch(req.url, { cache: 'no-cache' })
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put('./', copy));
-          }
-          return res;
-        })
         .catch(() => caches.match('./', { cacheName: CACHE })),
     );
     return;

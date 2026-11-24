@@ -94,6 +94,9 @@ body {
   margin-left: 6px; padding: 2px 8px; border-radius: 999px;
   background: var(--surface-2); color: var(--text); font-size: 12px;
 }
+/* ♪ keep-alive badge is a button so "paused, tap to resume" can be tapped */
+.badge-btn { border: 0; font-family: inherit; line-height: inherit; cursor: pointer; }
+.badge-btn.paused { color: var(--warn); }
 .actions { display: flex; gap: 8px; }
 
 .btn {

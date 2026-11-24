@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <script>
     // ===== APP VERSION: change this when you release (match your git tag) =====
-    const APP_VERSION = '1.2.0';
+    const APP_VERSION = '1.2.1';
     // Shown in ⚙ Settings, and added to the CSS/JS links (?v=…) so browsers
     // download fresh files after each release instead of reusing old cached ones.
   </script>
@@ -35,8 +35,8 @@
       <span class="dot" id="statusDot"></span>
       <span id="statusText">Not connected</span>
       <span class="battery" id="battery" hidden></span>
-      <span class="battery" id="keepAliveBadge" hidden
-            data-tip="Background keep-alive is on (experimental, see Settings).">♪ keep-alive</span>
+      <button type="button" class="battery badge-btn" id="keepAliveBadge" hidden
+            data-tip="Background keep-alive is on (experimental, see Settings).">♪ keep-alive</button>
     </div>
 
     <div class="actions">
