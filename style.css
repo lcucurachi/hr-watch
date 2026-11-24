@@ -10,9 +10,51 @@
   --ok: #3ddc84;
   --warn: #ffb020;
   --grid: rgba(255, 255, 255, 0.07);
+  --blue: #6aa8ff;                         /* links, selected items, demo dot */
+  --banner-bg: rgba(255, 176, 32, 0.12);
+  --banner-border: rgba(255, 176, 32, 0.4);
+  --banner-text: #ffd68a;
+  --tooltip-bg: #262c35;
+  --shadow: rgba(0, 0, 0, 0.5);
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --cursor: #ffffff;                       /* Mode 2 zone cursor */
+  --cursor-glow: rgba(255, 255, 255, 0.8);
+  --zone-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   --radius: 14px;
   --beat: 1s;
   color-scheme: dark;
+}
+
+/* Light mode: set by the ☀/☾ button (data-theme on <html>, see app.js) */
+:root[data-theme="light"] {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #eceff3;
+  --border: #d5dbe3;
+  --text: #121820;
+  --muted: #5d6877;
+  --accent: #e0263b;
+  --accent-soft: rgba(224, 38, 59, 0.14);
+  --ok: #1f9d55;
+  --warn: #b26b00;
+  --grid: rgba(0, 0, 0, 0.08);
+  --blue: #2f6fd6;
+  --banner-bg: #fff6e0;
+  --banner-border: #f0c36a;
+  --banner-text: #7a4b00;
+  --tooltip-bg: #ffffff;
+  --shadow: rgba(20, 30, 50, 0.16);
+  --backdrop: rgba(20, 25, 35, 0.35);
+  --cursor: #121820;
+  --cursor-glow: rgba(18, 24, 32, 0.35);
+  --zone-shadow: none;
+  /* darker zone colors so they stay readable on white */
+  --z1: #7d8794;
+  --z2: #1f9ad6;
+  --z3: #1fa152;
+  --z4: #c99700;
+  --z5: #e0263b;
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -49,7 +91,7 @@ body {
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
 .dot.connected { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .dot.busy { background: var(--warn); animation: blink 1s infinite; }
-.dot.demo { background: #6aa8ff; }
+.dot.demo { background: var(--blue); }
 .battery {
   margin-left: 6px; padding: 2px 8px; border-radius: 999px;
   background: var(--surface-2); color: var(--text); font-size: 12px;
@@ -65,12 +107,12 @@ body {
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.ghost { background: transparent; }
 .btn.small { padding: 6px 12px; font-size: 13px; }
-.btn.active { border-color: #6aa8ff; color: #6aa8ff; }
+.btn.active { border-color: var(--blue); color: var(--blue); }
 
 .banner {
-  background: rgba(255, 176, 32, 0.12);
-  border: 1px solid rgba(255, 176, 32, 0.4);
-  color: #ffd68a;
+  background: var(--banner-bg);
+  border: 1px solid var(--banner-border);
+  color: var(--banner-text);
   padding: 10px 14px; border-radius: 10px;
   font-size: 14px; margin-bottom: 12px; line-height: 1.45;
 }
@@ -104,8 +146,8 @@ body {
 .bpm-unit { font-size: clamp(18px, 3vw, 28px); color: var(--muted); font-weight: 600; }
 .heart { width: 44px; height: 44px; margin-bottom: 4px; }
 .heart svg { width: 100%; height: 100%; fill: var(--muted); }
-.heart.beating svg {
-  fill: var(--accent);
+.heart.live svg { fill: var(--accent); }   /* receiving data */
+.heart.beating svg {                       /* + pulse animation (setting) */
   animation: beat var(--beat) infinite;
   transform-origin: center;
 }
@@ -147,7 +189,7 @@ body {
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* ---------- mode 2: zone bars ---------- */
-:root {
+:root:not([data-theme="light"]) {
   --z1: #a3acb8; /* gray */
   --z2: #6cc9f5; /* light blue */
   --z3: #4cd97b; /* green */
@@ -175,7 +217,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 8px; padding: 6px 10px;
 }
-.age-field input:focus { outline: none; border-color: #6aa8ff; }
+.age-field input:focus { outline: none; border-color: var(--blue); }
 .age-field strong { color: var(--text); }
 .zones-hint {
   color: var(--warn); font-size: 14px; margin-bottom: 12px;
@@ -215,7 +257,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   position: relative; z-index: 1; height: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: space-between;
   padding: 14px 4px; text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  text-shadow: var(--zone-shadow);
 }
 .zone.active .zone-content { padding: 16px 14px; }
 .zone-label { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
@@ -241,8 +283,8 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   position: absolute; top: 0; bottom: 0; z-index: 2;
   left: var(--pos, 0%);
   width: 4px; margin-left: -2px;
-  background: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  background: var(--cursor);
+  box-shadow: 0 0 10px var(--cursor-glow);
   opacity: 0;
   transition: left 0.8s ease, opacity 0.3s;
 }
@@ -301,9 +343,9 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   padding: 0;
   border: 1px solid var(--border); border-radius: 16px;
   background: var(--surface); color: var(--text);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 20px 60px var(--shadow);
 }
-.help::backdrop { background: rgba(0, 0, 0, 0.6); }
+.help::backdrop { background: var(--backdrop); }
 .help-inner { padding: 20px 22px 22px; }
 .help-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .help-head h2 { margin: 0; font-size: 20px; }
@@ -319,7 +361,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   background: var(--bg); border: 1px solid var(--border);
   border-radius: 12px; margin-bottom: 8px;
 }
-.help-item.mine { border-color: #6aa8ff; }
+.help-item.mine { border-color: var(--blue); }
 .help-item summary {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   padding: 12px 14px; font-weight: 700; cursor: pointer; list-style: none;
@@ -333,7 +375,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .badge.ok { background: rgba(61, 220, 132, 0.15); color: var(--ok); }
 .badge.setup { background: rgba(255, 176, 32, 0.15); color: var(--warn); }
 .badge.no { background: rgba(255, 77, 94, 0.15); color: var(--accent); }
-.yours { display: none; font-size: 12px; font-weight: 600; color: #6aa8ff; }
+.yours { display: none; font-size: 12px; font-weight: 600; color: var(--blue); }
 .help-item.mine .yours { display: inline; }
 
 .help-body { padding: 0 16px 14px; font-size: 14px; line-height: 1.55; }
@@ -341,7 +383,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .help-body ol { margin: 4px 0 10px; padding-left: 20px; }
 .help-body li { margin-bottom: 6px; }
 .help-body h4 { margin: 14px 0 4px; font-size: 14px; }
-.help-body a { color: #6aa8ff; }
+.help-body a { color: var(--blue); }
 .help-body code {
   background: var(--surface-2); padding: 2px 6px; border-radius: 6px;
   font-size: 13px; word-break: break-all;
@@ -352,15 +394,55 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   border: 1px solid var(--border); border-radius: 6px;
   background: var(--surface); color: var(--text); cursor: pointer;
 }
-.copy:hover { border-color: #6aa8ff; }
+.copy:hover { border-color: var(--blue); }
+
+/* ---------- settings panel (reuses the help panel look) ---------- */
+.btn.icon { padding: 9px 12px; font-size: 16px; line-height: 1; }
+.label-short { display: none; } /* "?" instead of "Help" on phones */
+.setting { margin: 10px 0 14px; }
+.setting-label { display: block; font-weight: 700; margin-bottom: 4px; }
+.setting-desc { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 10px; }
+.setting-row { display: flex; align-items: center; gap: 10px; }
+.setting-row input {
+  width: 90px; font: inherit; font-size: 16px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 10px;
+}
+.setting-row input:focus { outline: none; border-color: var(--blue); }
+
+.help { overflow-y: auto; } /* long panels scroll inside */
+.setting-group {
+  margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+}
+.setting-group:first-of-type { margin-top: 8px; padding-top: 0; border-top: 0; }
+.setting-inline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.setting-inline .setting-label { margin: 0; }
+.setting input[type="number"] {
+  width: 90px; font: inherit; font-size: 16px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 7px 10px;
+}
+.setting input[type="number"]:focus { outline: none; border-color: var(--blue); }
+.setting-result { margin: 8px 0 0; }
+.setting-result strong { color: var(--text); }
+.choice-row { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.choice, .toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; cursor: pointer;
+}
+.toggle { margin: 10px 0; }
+.choice input, .toggle input { width: 17px; height: 17px; margin: 0; accent-color: var(--blue); flex: none; }
+.btn.danger { background: transparent; border-color: rgba(255, 77, 94, 0.6); color: var(--accent); }
+.btn.danger:hover { background: rgba(255, 77, 94, 0.12); }
 
 /* ---------- tooltips (see tooltip.js) ---------- */
 .tooltip {
   position: fixed; top: 0; left: 0; z-index: 1000;
   max-width: 260px; padding: 7px 10px;
-  background: #262c35; color: var(--text);
+  background: var(--tooltip-bg); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 6px 20px var(--shadow);
   font-size: 13px; line-height: 1.4;
   pointer-events: none;
   opacity: 0; visibility: hidden; transform: translateY(-3px);
@@ -381,7 +463,13 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 @keyframes blink { 50% { opacity: 0.3; } }
 
 @media (max-width: 600px) {
-  .actions { margin-left: auto; }
+  .brand { font-size: 16px; }
+  .topbar { gap: 8px; }
+  .actions { margin-left: auto; gap: 5px; }
+  .actions .btn { padding: 8px 11px; }
+  .actions .btn.icon { padding: 8px 9px; }
+  .label-long { display: none; }
+  .label-short { display: inline; }
   .status { order: 3; flex-basis: 100%; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .tabs { width: 100%; }

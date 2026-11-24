@@ -26,8 +26,7 @@ const els = {
   chart: $('chart'),
 };
 
-const STALE_MS = 5000;                           // no data for this long = "--"
-const GAP_MS = 5000;                              // chart line breaks on gaps longer than this
+const GAP_MS = 5000;                             // chart line breaks on gaps longer than this
 
 const state = {
   // conn: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'demo'
@@ -42,17 +41,100 @@ const state = {
 
   stats: { max: null, min: null, sum: 0, count: 0, start: null },
 
-  age: null,                    // used for max HR = 220 − age
   zoneTime: [0, 0, 0, 0, 0, 0], // ms spent per zone; index 0 = below Zone 1
+
+  restored: false,  // true while showing a session restored after a reload
 };
 
-/* ---------------------------------------------------------------- settings */
+/* ================================================================ settings */
+// Each setting is saved in localStorage as "hrwatch.<name>" (JSON) the moment it changes.
+
+const isBool = (v) => v === true || v === false;
+const intIn = (lo, hi) => (v) => Number.isInteger(v) && v >= lo && v <= hi;
+
+const SETTINGS = {
+  age:            { def: null,      valid: (v) => v === null || intIn(10, 100)(v) },
+  formula:        { def: 'classic', valid: (v) => v === 'classic' || v === 'tanaka' },
+  maxOverride:    { def: null,      valid: (v) => v === null || intIn(100, 240)(v) },
+  keepAwake:      { def: true,      valid: isBool },
+  pulse:          { def: true,      valid: isBool },
+  avgLine:        { def: true,      valid: isBool },
+  staleSec:       { def: 5,         valid: intIn(2, 60) },
+  reconnectTries: { def: 10,        valid: intIn(0, 50) },
+  resumeMin:      { def: 1,         valid: intIn(0, 1440) },
+  saveLocal:      { def: true,      valid: isBool },
+  csvSep:         { def: ',',       valid: (v) => v === ',' || v === ';' },
+  theme:          { def: null,      valid: (v) => v === null || v === 'light' || v === 'dark' }, // null = follow device
+};
+
+const settings = {};
+for (const [key, spec] of Object.entries(SETTINGS)) {
+  settings[key] = spec.def;
+  try {
+    const raw = localStorage.getItem(`hrwatch.${key}`);
+    if (raw !== null) {
+      const v = JSON.parse(raw);
+      if (spec.valid(v)) settings[key] = v;
+    }
+  } catch { /* storage unavailable or bad value — keep the default */ }
+}
+
 try {
   const saved = Number(localStorage.getItem('hrwatch.windowMin'));
   if ([1, 5, 10, 30].includes(saved)) state.windowMin = saved;
-  const age = Number(localStorage.getItem('hrwatch.age'));
-  if (age >= 10 && age <= 100) state.age = age;
 } catch { /* storage unavailable — use defaults */ }
+
+/** Change a setting: validate, save, apply. Returns false if the value isn't allowed. */
+function setSetting(key, value) {
+  if (!SETTINGS[key].valid(value)) return false;
+  settings[key] = value;
+  try {
+    if (value === null) localStorage.removeItem(`hrwatch.${key}`);
+    else localStorage.setItem(`hrwatch.${key}`, JSON.stringify(value));
+  } catch { /* storage unavailable — still applies for this visit */ }
+  applySetting(key);
+  return true;
+}
+
+function applySetting(key) {
+  const live = state.conn === 'connected' || state.conn === 'demo';
+  switch (key) {
+    case 'age':
+    case 'formula':
+    case 'maxOverride':
+      if (state.samples.length) recomputeStats(state.stats.start); // zone times depend on max HR
+      syncAgeInputs();
+      renderMaxUsed();
+      renderLive();
+      break;
+    case 'keepAwake':
+      if (settings.keepAwake && live) requestWakeLock(); else releaseWakeLock();
+      break;
+    case 'pulse':
+    case 'staleSec':
+      renderLive();
+      requestDraw();
+      break;
+    case 'avgLine':
+      requestDraw();
+      break;
+    case 'theme':
+      applyTheme();
+      break;
+    case 'saveLocal':
+      if (settings.saveLocal) saveWholeSession();
+      else {
+        unsaved.samples = [];
+        unsaved.rr = [];
+        sessionStore.clear().catch((e) => console.warn('Could not clear saved session', e));
+      }
+      break;
+  }
+  // let other parts (e.g. Explore) react
+  document.dispatchEvent(new CustomEvent('hrwatch:settings', { detail: key }));
+}
+
+const staleMs = () => settings.staleSec * 1000; // no data for this long = "--"
 
 /* ======================================================= Bluetooth (BLE) */
 
@@ -70,7 +152,10 @@ async function connect() {
       optionalServices: ['battery_service'],
     });
     state.device = device;
-    resetSession(); // manual connect = new session (auto-reconnect keeps it)
+    // Manual connect = new session, unless it's a just-restored session that's recent enough
+    // (auto-reconnect after a signal drop never gets here, so it always keeps the session)
+    if (!canResumeRestored()) resetSession();
+    state.restored = false;
     device.addEventListener('gattserverdisconnected', onDisconnected);
     await setupGatt(device);
   } catch (err) {
@@ -113,10 +198,11 @@ async function onDisconnected() {
     return;
   }
   if (state.conn === 'reconnecting') return; // a reconnect loop is already running
-  // Signal dropped — try to reconnect with growing delays.
-  for (let attempt = 1; attempt <= 10; attempt++) {
+  // Signal dropped — try to reconnect with growing delays (number of tries is a setting).
+  const tries = settings.reconnectTries;
+  for (let attempt = 1; attempt <= tries; attempt++) {
     if (state.userDisconnect) return;
-    setConn('reconnecting', `Signal lost — reconnecting (${attempt}/10)…`);
+    setConn('reconnecting', `Signal lost — reconnecting (${attempt}/${tries})…`);
     await sleep(Math.min(1000 * attempt, 8000));
     if (state.userDisconnect) return;
     try {
@@ -223,6 +309,7 @@ function addReading(hr, rrList, contact) {
     if (prev && max) state.zoneTime[zoneOf(prev.hr, max).z] += Math.min(now - prev.t, 3000);
 
     state.samples.push({ t: now, hr });
+    if (shouldSave()) unsaved.samples.push([now, hr]);
     state.lastSampleAt = now;
     const s = state.stats;
     if (s.start === null) s.start = now;
@@ -231,7 +318,10 @@ function addReading(hr, rrList, contact) {
     s.sum += hr;
     s.count += 1;
   }
-  for (const ms of rrList) state.rr.push({ t: now, ms });
+  for (const ms of rrList) {
+    state.rr.push({ t: now, ms });
+    if (shouldSave()) unsaved.rr.push([now, Math.round(ms * 10) / 10]);
+  }
 
   renderLive();
   requestDraw();
@@ -243,9 +333,92 @@ function resetSession() {
   state.lastSampleAt = 0;
   state.stats = { max: null, min: null, sum: 0, count: 0, start: null };
   state.zoneTime = [0, 0, 0, 0, 0, 0];
+  state.restored = false;
   if (state.conn === 'connected' || state.conn === 'demo') state.stats.start = Date.now();
+  // forget the saved copy too
+  unsaved.samples = [];
+  unsaved.rr = [];
+  sessionStore.clear().catch((e) => console.warn('Could not clear saved session', e));
   renderLive();
   requestDraw();
+}
+
+/* ================================================ saving + restoring */
+// The live session is saved in IndexedDB (storage.js) every few seconds,
+// so a page reload doesn't lose it.
+
+const SAVE_EVERY_MS = 5000;
+const unsaved = { samples: [], rr: [] }; // readings not written to the database yet
+
+// demo data is never saved, and nothing is saved when the setting is off
+const shouldSave = () => settings.saveLocal && state.conn !== 'demo';
+
+/** Write the whole current session from scratch (used when saving is switched back on). */
+function saveWholeSession() {
+  unsaved.samples = [];
+  unsaved.rr = [];
+  const samples = state.conn === 'demo' ? [] : state.samples.map((p) => [p.t, p.hr]);
+  const rr = state.conn === 'demo' ? [] : state.rr.map((r) => [r.t, Math.round(r.ms * 10) / 10]);
+  sessionStore.clear()
+    .then(() => (samples.length ? sessionStore.append(state.stats.start ?? samples[0][0], samples, rr) : null))
+    .catch((e) => console.warn('Could not save session', e));
+}
+
+function saveNow() {
+  if (!unsaved.samples.length && !unsaved.rr.length) return;
+  const samples = unsaved.samples;
+  const rr = unsaved.rr;
+  unsaved.samples = [];
+  unsaved.rr = [];
+  sessionStore.append(state.stats.start ?? samples[0]?.[0] ?? Date.now(), samples, rr)
+    .catch((e) => console.warn('Could not save session', e));
+}
+
+setInterval(saveNow, SAVE_EVERY_MS);
+// also save right away when the tab is hidden, closed or reloaded
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNow(); });
+window.addEventListener('pagehide', saveNow);
+
+/** Recalculate max/avg/min and time in zones from the readings. */
+function recomputeStats(start) {
+  const s = { max: null, min: null, sum: 0, count: 0, start };
+  const zt = [0, 0, 0, 0, 0, 0];
+  const max = hrMax();
+  state.samples.forEach((p, i) => {
+    s.max = s.max === null ? p.hr : Math.max(s.max, p.hr);
+    s.min = s.min === null ? p.hr : Math.min(s.min, p.hr);
+    s.sum += p.hr;
+    s.count += 1;
+    const prev = state.samples[i - 1];
+    if (prev && max) zt[zoneOf(prev.hr, max).z] += Math.min(p.t - prev.t, 3000);
+  });
+  state.stats = s;
+  state.zoneTime = zt;
+}
+
+function canResumeRestored() {
+  return state.restored && state.samples.length > 0
+    && Date.now() - state.lastSampleAt < settings.resumeMin * 60 * 1000;
+}
+
+async function restoreSession() {
+  try {
+    const saved = await sessionStore.load();
+    if (!saved || !saved.samples.length || state.samples.length) return; // nothing saved, or already recording
+    state.samples = saved.samples.map(([t, hr]) => ({ t, hr }));
+    state.rr = saved.rr.map(([t, ms]) => ({ t, ms }));
+    recomputeStats(saved.start);
+    state.lastSampleAt = state.samples[state.samples.length - 1].t;
+    state.restored = true;
+
+    const from = new Date(saved.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    setConn('idle', canResumeRestored()
+      ? `Session from ${from} restored. Press Connect to continue it.`
+      : `Session from ${from} restored. Connect will start a new one.`);
+    requestDraw();
+  } catch (e) {
+    console.warn('Could not restore session', e);
+  }
 }
 
 /* ============================================================== UI */
@@ -274,17 +447,18 @@ function setConn(conn, text) {
 
 function renderLive() {
   const now = Date.now();
-  const fresh = state.lastSampleAt && now - state.lastSampleAt < STALE_MS;
+  const fresh = state.lastSampleAt && now - state.lastSampleAt < staleMs();
   const last = state.samples[state.samples.length - 1];
+  const showing = !!(fresh && last);
 
-  els.bpmValue.classList.toggle('idle', !(fresh && last));
-  if (fresh && last) {
+  els.bpmValue.classList.toggle('idle', !showing);
+  els.heart.classList.toggle('live', showing);                     // red heart
+  els.heart.classList.toggle('beating', showing && settings.pulse); // pulsing (setting)
+  if (showing) {
     els.bpmValue.textContent = last.hr;
-    els.heart.classList.add('beating');
     document.documentElement.style.setProperty('--beat', `${(60 / last.hr).toFixed(3)}s`);
   } else {
     els.bpmValue.textContent = '--';
-    els.heart.classList.remove('beating');
   }
 
   const s = state.stats;
@@ -309,13 +483,21 @@ function formatDuration(ms) {
 
 /* ============================================================ chart */
 
+// Chart colors come from the CSS variables, re-read when switching light/dark mode.
 const css = getComputedStyle(document.documentElement);
-const colors = {
-  accent: css.getPropertyValue('--accent').trim(),
-  muted: css.getPropertyValue('--muted').trim(),
-  grid: css.getPropertyValue('--grid').trim(),
-  text: css.getPropertyValue('--text').trim(),
-};
+const colors = {};
+function refreshColors() {
+  for (const name of ['accent', 'muted', 'grid', 'text', 'bg', 'surface']) {
+    colors[name] = css.getPropertyValue(`--${name}`).trim();
+  }
+}
+refreshColors();
+
+/** '#rrggbb' + opacity → 'rgba(…)' */
+function withAlpha(hex, a) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
 
 let drawPending = false;
 function requestDraw() {
@@ -413,8 +595,8 @@ function drawChart() {
   if (seg.length) segments.push(seg);
 
   const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
-  grad.addColorStop(0, 'rgba(255, 77, 94, 0.30)');
-  grad.addColorStop(1, 'rgba(255, 77, 94, 0)');
+  grad.addColorStop(0, withAlpha(colors.accent, 0.3));
+  grad.addColorStop(1, withAlpha(colors.accent, 0));
 
   for (const s of segments) {
     if (s.length < 2) continue;
@@ -437,7 +619,7 @@ function drawChart() {
 
   // session average as a dashed line
   const st = state.stats;
-  if (st.count) {
+  if (st.count && settings.avgLine) {
     const avg = st.sum / st.count;
     if (avg >= lo && avg <= hi) {
       ctx.setLineDash([5, 5]);
@@ -457,7 +639,7 @@ function drawChart() {
 
   // dot on the latest reading
   const last = state.samples[state.samples.length - 1];
-  if (last && now - last.t < STALE_MS) {
+  if (last && now - last.t < staleMs()) {
     ctx.beginPath();
     ctx.arc(x(last.t), y(last.hr), 4, 0, Math.PI * 2);
     ctx.fillStyle = colors.accent;
@@ -477,7 +659,7 @@ function drawChart() {
 }
 
 /* ===================================================== zones (Mode 2) */
-// Standard 5-zone model as % of max heart rate; max HR = 220 − age.
+// Standard 5-zone model as % of max heart rate (from age + formula, or the override setting).
 
 const ZONES = [
   { name: 'Very light', from: 0.5, to: 0.6, color: 'var(--z1)' },
@@ -487,7 +669,14 @@ const ZONES = [
   { name: 'Maximum',    from: 0.9, to: 1.0, color: 'var(--z5)' },
 ];
 
-function hrMax() { return state.age ? 220 - state.age : null; }
+/** Max HR estimated from an age with the chosen formula. */
+function maxFromAge(age) {
+  if (!age) return null;
+  return settings.formula === 'tanaka' ? Math.round(208 - 0.7 * age) : 220 - age;
+}
+
+/** Max HR used for the live session: the override if set, otherwise from your age. */
+function hrMax() { return settings.maxOverride || maxFromAge(settings.age); }
 
 function zoneBounds(max) {
   return ZONES.map((z) => ({ lo: Math.round(max * z.from), hi: Math.round(max * z.to) }));
@@ -543,7 +732,7 @@ function renderZones() {
 
   const bounds = max ? zoneBounds(max) : null;
   const last = state.samples[state.samples.length - 1];
-  const fresh = last && Date.now() - state.lastSampleAt < STALE_MS;
+  const fresh = last && Date.now() - state.lastSampleAt < staleMs();
   const cur = max && fresh ? zoneOf(last.hr, max) : null;
   $('zones').classList.toggle('no-data', !cur);
 
@@ -592,13 +781,54 @@ function renderZones() {
   }
 }
 
+// Age appears in two places (Mode 2 and Settings); both edit the same setting.
 const ageInput = $('ageInput');
-if (state.age) ageInput.value = state.age;
+const setAgeInput = $('setAge');
+
+function syncAgeInputs() {
+  for (const el of [ageInput, setAgeInput]) {
+    if (document.activeElement !== el) el.value = settings.age ?? '';
+  }
+}
+
 ageInput.addEventListener('input', () => {
   const v = Number(ageInput.value);
-  state.age = v >= 10 && v <= 100 ? v : null;
-  try { if (state.age) localStorage.setItem('hrwatch.age', state.age); } catch { /* ignore */ }
-  renderZones();
+  setSetting('age', ageInput.value !== '' && Number.isInteger(v) && v >= 10 && v <= 100 ? v : null);
+});
+
+/* ========================================================= light / dark */
+
+const themeBtn = $('themeBtn');
+const systemLight = matchMedia('(prefers-color-scheme: light)');
+
+/** The mode in use: your choice, or the device's setting if you haven't chosen. */
+function currentTheme() {
+  return settings.theme || (systemLight.matches ? 'light' : 'dark');
+}
+
+function applyTheme() {
+  const theme = currentTheme();
+  document.documentElement.dataset.theme = theme;
+  refreshColors();
+  // phone status bar color
+  document.querySelector('meta[name="theme-color"]').content = colors.bg;
+  // the button offers the other mode
+  const next = theme === 'dark' ? 'light' : 'dark';
+  themeBtn.textContent = next === 'light' ? '☀︎' : '☾︎';
+  themeBtn.setAttribute('aria-label', `Switch to ${next} mode`);
+  themeBtn.dataset.tip = `Switch to ${next} mode.`;
+  requestDraw();
+}
+
+themeBtn.addEventListener('click', () => {
+  setSetting('theme', currentTheme() === 'dark' ? 'light' : 'dark');
+});
+// follow the device when it switches, unless you've picked a mode
+systemLight.addEventListener('change', () => {
+  if (!settings.theme) {
+    applyTheme();
+    document.dispatchEvent(new CustomEvent('hrwatch:settings', { detail: 'theme' }));
+  }
 });
 
 /* ======================================================= screen wake lock */
@@ -606,6 +836,7 @@ ageInput.addEventListener('input', () => {
 
 let wakeLock = null;
 async function requestWakeLock() {
+  if (!settings.keepAwake) return; // setting
   try {
     if ('wakeLock' in navigator && !wakeLock) {
       wakeLock = await navigator.wakeLock.request('screen');
@@ -636,6 +867,88 @@ els.demoBtn.addEventListener('click', () => {
 });
 
 els.resetBtn.addEventListener('click', resetSession);
+
+/* ------------------------------------------------------ settings panel */
+
+const settingsDialog = $('settingsDialog');
+
+/** Show the current values in the panel's fields. */
+function fillSettingsForm() {
+  syncAgeInputs();
+  $('setMaxOverride').value = settings.maxOverride ?? '';
+  $('setKeepAwake').checked = settings.keepAwake;
+  $('setPulse').checked = settings.pulse;
+  $('setAvgLine').checked = settings.avgLine;
+  $('setStale').value = settings.staleSec;
+  $('setReconnect').value = settings.reconnectTries;
+  $('resumeInput').value = settings.resumeMin;
+  $('setSaveLocal').checked = settings.saveLocal;
+  for (const r of document.querySelectorAll('input[name="setFormula"]')) r.checked = r.value === settings.formula;
+  for (const r of document.querySelectorAll('input[name="setCsvSep"]')) r.checked = r.value === settings.csvSep;
+  renderMaxUsed();
+}
+
+/** "Max HR used: 185 (from age 35, 220 − age)" line under the override field. */
+function renderMaxUsed() {
+  const el = $('setMaxUsed');
+  const max = hrMax();
+  if (!max) { el.textContent = 'Enter your age or a max heart rate to calculate your zones.'; return; }
+  const how = settings.maxOverride
+    ? 'your override'
+    : `age ${settings.age}, ${settings.formula === 'tanaka' ? '208 − 0.7 × age' : '220 − age'}`;
+  el.innerHTML = `Max heart rate used: <strong>${max} bpm</strong> (${how})`;
+}
+
+/** Number field → setting. Invalid values snap back to the current one. */
+function bindNumber(id, key, allowEmpty = false) {
+  const el = $(id);
+  el.addEventListener('change', () => {
+    const raw = el.value.trim();
+    const v = raw === '' ? null : Math.round(Number(raw));
+    if ((raw === '' && !allowEmpty) || !setSetting(key, v)) el.value = settings[key] ?? '';
+    else el.value = v ?? '';
+  });
+}
+function bindCheckbox(id, key) {
+  $(id).addEventListener('change', (e) => setSetting(key, e.target.checked));
+}
+function bindRadios(name, key) {
+  for (const r of document.querySelectorAll(`input[name="${name}"]`)) {
+    r.addEventListener('change', () => { if (r.checked) setSetting(key, r.value); });
+  }
+}
+
+bindNumber('setAge', 'age', true);
+bindRadios('setFormula', 'formula');
+bindNumber('setMaxOverride', 'maxOverride', true);
+bindCheckbox('setKeepAwake', 'keepAwake');
+bindCheckbox('setPulse', 'pulse');
+bindCheckbox('setAvgLine', 'avgLine');
+bindNumber('setStale', 'staleSec');
+bindNumber('setReconnect', 'reconnectTries');
+bindNumber('resumeInput', 'resumeMin');
+bindCheckbox('setSaveLocal', 'saveLocal');
+bindRadios('setCsvSep', 'csvSep');
+
+$('settingsBtn').addEventListener('click', () => {
+  fillSettingsForm();
+  settingsDialog.showModal();
+});
+$('settingsClose').addEventListener('click', () => settingsDialog.close());
+settingsDialog.addEventListener('click', (e) => { if (e.target === settingsDialog) settingsDialog.close(); });
+
+// "Delete saved data": saved session + every hrwatch.* setting, then start fresh
+$('deleteDataBtn').addEventListener('click', async () => {
+  if (!confirm('Delete the saved session and all settings from this browser?\nThe app will reload and the current session will be lost.')) return;
+  settings.saveLocal = false; // stop any save from running while we clear
+  unsaved.samples = [];
+  unsaved.rr = [];
+  try { await sessionStore.clear(); } catch (e) { console.warn('Could not clear saved session', e); }
+  try {
+    for (const key of Object.keys(localStorage)) if (key.startsWith('hrwatch.')) localStorage.removeItem(key);
+  } catch { /* storage unavailable */ }
+  location.reload();
+});
 
 function syncWindowPicker() {
   for (const b of els.windowPicker.querySelectorAll('button')) {
@@ -679,7 +992,10 @@ window.addEventListener('load', () => {
   els.unsupported.hidden = !!getBluetooth();
   setConn(state.conn, els.statusText.textContent);
 });
+applyTheme();
 buildZones();
+syncAgeInputs();
 syncWindowPicker();
 setConn('idle', 'Not connected');
 requestDraw();
+restoreSession();

@@ -38,7 +38,10 @@ const exEls = {
 };
 
 const MIN_SPAN = 30 * 1000; // can't zoom in closer than 30 seconds
-const zoneColors = [1, 2, 3, 4, 5].map((i) => css.getPropertyValue(`--z${i}`).trim());
+// zone colors from CSS; re-read when switching light/dark mode
+let zoneColors = [];
+const readZoneColors = () => { zoneColors = [1, 2, 3, 4, 5].map((i) => css.getPropertyValue(`--z${i}`).trim()); };
+readZoneColors();
 
 /* ============================================================ helpers */
 
@@ -59,10 +62,7 @@ function fileStamp(t) {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}`;
 }
 
-function withAlpha(hex, a) {
-  const n = parseInt(hex.replace('#', ''), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-}
+// withAlpha() lives in app.js
 
 /** First index whose time is >= t (binary search; samples are sorted by time). */
 function lowerBound(arr, t) {
@@ -74,8 +74,11 @@ function lowerBound(arr, t) {
   return lo;
 }
 
-/** Age used for zones: the one entered in Mode 2, otherwise the one saved in the file. */
-function exAge() { return state.age || (ex.data && ex.data.age) || null; }
+/** Age used for zones: your age setting, otherwise the one saved in the file. */
+function exAge() { return settings.age || (ex.data && ex.data.age) || null; }
+
+/** Max HR for this data: your override if set, otherwise from the age with the chosen formula. */
+function exMax() { return settings.maxOverride || maxFromAge(exAge()); }
 
 function statsOf(s, i0 = 0, i1 = s.length) {
   if (i1 - i0 <= 0) return null;
@@ -130,7 +133,7 @@ function loadLive() {
     samples: state.samples.map((p) => ({ t: p.t, hr: p.hr })),
     rr: state.rr.map((r) => ({ t: r.t, ms: r.ms })),
     start: state.stats.start ?? state.samples[0].t,
-    age: state.age,
+    age: settings.age,
     label: `Live session snapshot · taken at ${fmtClock(Date.now(), true)}`,
   });
 }
@@ -195,14 +198,14 @@ function exportJson() {
 function exportCsv() {
   const d = ex.data;
   if (!d) return;
-  const age = exAge();
-  const max = age ? 220 - age : null;
+  const max = exMax();
+  const sep = settings.csvSep; // comma, or semicolon for Excel with European settings
   const t0 = d.samples[0].t;
-  const lines = ['time,elapsed_s,bpm,zone'];
+  const lines = [['time', 'elapsed_s', 'bpm', 'zone'].join(sep)];
   for (const p of d.samples) {
     const dt = new Date(p.t);
     const time = `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())} ${fmtClock(p.t, true)}`;
-    lines.push(`${time},${Math.round((p.t - t0) / 1000)},${p.hr},${max ? zoneOf(p.hr, max).z : ''}`);
+    lines.push([time, Math.round((p.t - t0) / 1000), p.hr, max ? zoneOf(p.hr, max).z : ''].join(sep));
   }
   download(`hrwatch-${fileStamp(t0)}.csv`, lines.join('\r\n'), 'text/csv');
 }
@@ -224,15 +227,16 @@ function renderExplorer() {
   exEls.min.textContent = st.min;
 
   // time in zones
-  const age = exAge();
-  if (!age) {
+  const max = exMax();
+  if (!max) {
     exEls.zonesNote.textContent = '';
-    exEls.zones.innerHTML = '<div class="muted">Enter your age in Mode 2 to see time in zones.</div>';
+    exEls.zones.innerHTML = '<div class="muted">Enter your age or max heart rate in ⚙ Settings to see time in zones.</div>';
   } else {
-    const max = 220 - age;
     const zt = zoneTimes(d.samples, max);
     const total = zt.reduce((a, b) => a + b, 0) || 1;
-    exEls.zonesNote.textContent = `max HR ${max} (age ${age}${state.age ? '' : ', from file'})`;
+    exEls.zonesNote.textContent = settings.maxOverride
+      ? `max HR ${max} (your override)`
+      : `max HR ${max} (age ${exAge()}${settings.age ? '' : ', from file'})`;
     const row = (name, color, ms) => {
       const pct = (ms / total) * 100;
       return `<div class="ex-zone-row" style="--zc:${color}">
@@ -311,8 +315,7 @@ function drawExMain() {
   const y = (v) => pad.t + (1 - (v - lo) / (hi - lo)) * ph;
 
   // zone color bands behind everything
-  const age = exAge();
-  const max = age ? 220 - age : null;
+  const max = exMax();
   if (max) {
     zoneBounds(max).forEach((z, i) => {
       const top = y(Math.min(z.hi, hi));
@@ -362,8 +365,8 @@ function drawExMain() {
 
   // heart rate line, broken where data has gaps
   const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
-  grad.addColorStop(0, 'rgba(255, 77, 94, 0.28)');
-  grad.addColorStop(1, 'rgba(255, 77, 94, 0)');
+  grad.addColorStop(0, withAlpha(colors.accent, 0.28));
+  grad.addColorStop(1, withAlpha(colors.accent, 0));
   let segStart = i0;
   for (let i = i0 + 1; i <= i1; i++) {
     if (i === i1 || s[i].t - s[i - 1].t > GAP_MS) {
@@ -423,7 +426,7 @@ function drawExMain() {
     const p = s[ex.hover];
     const px = x(p.t);
     const py = y(p.hr);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.strokeStyle = withAlpha(colors.text, 0.35);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(Math.round(px) + 0.5, pad.t);
@@ -442,7 +445,7 @@ function drawExMain() {
     let bx = px + 10;
     if (bx + bw > w - pad.r) bx = px - 10 - bw;
     const by = Math.max(pad.t, Math.min(py - bh - 10, pad.t + ph - bh));
-    ctx.fillStyle = 'rgba(13, 16, 20, 0.92)';
+    ctx.fillStyle = withAlpha(colors.surface, 0.95);
     ctx.strokeStyle = colors.grid;
     ctx.beginPath();
     ctx.roundRect(bx, by, bw, bh, 6);
@@ -478,7 +481,7 @@ function drawExOverview() {
   // dim everything outside the visible window, outline the window
   const vx0 = x(ex.view.t0);
   const vx1 = x(ex.view.t1);
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillStyle = withAlpha(colors.bg, 0.7); // dims the parts outside the view
   ctx.fillRect(0, 0, vx0, h);
   ctx.fillRect(vx1, 0, w - vx1, h);
   ctx.strokeStyle = colors.text;
@@ -494,6 +497,7 @@ function timeAtX(px) {
 }
 
 function setHoverAt(px) {
+  if (!ex.geom) return; // chart hasn't been drawn yet
   const s = ex.data.samples;
   const t = timeAtX(px);
   let i = lowerBound(s, t);
@@ -643,7 +647,11 @@ exEls.csvBtn.addEventListener('click', exportCsv);
 exEls.clearBtn.addEventListener('click', () => setData(null));
 
 // age changes in Mode 2 update zones here too
-$('ageInput').addEventListener('input', () => { if (ex.data) renderExplorer(); });
+// age / formula / max HR changes in Settings or Mode 2 update zones here too
+document.addEventListener('hrwatch:settings', (e) => {
+  if (e.detail === 'theme') { readZoneColors(); requestExDraw(); }
+  if (ex.data && ['age', 'formula', 'maxOverride'].includes(e.detail)) renderExplorer();
+});
 
 // redraw when the tab becomes visible or the window is resized
 new ResizeObserver(requestExDraw).observe(exEls.chartWrap);
