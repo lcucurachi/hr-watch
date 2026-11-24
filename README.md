@@ -4,7 +4,7 @@
 
 **Live heart rate from your Polar H10 (or any Bluetooth heart rate strap), right in your browser.**
 
-[**▶ Try it live**](https://YOUR-USERNAME.github.io/YOUR-REPO/)
+[**▶ Try it live**](https://lcucurachi.github.io/hr-watch/)
 
 ![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)
 ![Free](https://img.shields.io/badge/price-free-brightgreen)
