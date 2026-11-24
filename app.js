@@ -26,7 +26,32 @@ const els = {
   chart: $('chart'),
 };
 
-const GAP_MS = 5000;                             // chart line breaks on gaps longer than this
+/* -------------------------------------------- checks for outside data */
+// Readings from imported files or browser storage are checked before use.
+// Besides rejecting junk, the limits keep the charts' drawing loops small,
+// so a crafted file can't freeze the page with absurd values.
+const MIN_TIME = Date.UTC(2000, 0, 1);
+const MAX_TIME = Date.UTC(2100, 0, 1);
+const isValidTime = (t) => Number.isFinite(t) && t >= MIN_TIME && t <= MAX_TIME;
+const isValidHr = (hr) => Number.isInteger(hr) && hr >= 20 && hr <= 300;   // bpm
+const isValidRr = (ms) => Number.isFinite(ms) && ms >= 150 && ms <= 3000;  // ms between beats
+
+/** Keep only well-formed [time, bpm] rows, as { t, hr } sorted by time. */
+function cleanSamples(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((p) => Array.isArray(p) && isValidTime(p[0]) && isValidHr(p[1]))
+    .map(([t, hr]) => ({ t, hr }))
+    .sort((a, b) => a.t - b.t);
+}
+
+/** Keep only well-formed [time, ms] beat-interval rows, as { t, ms }. */
+function cleanRr(rows) {
+  return (Array.isArray(rows) ? rows : [])
+    .filter((p) => Array.isArray(p) && isValidTime(p[0]) && isValidRr(p[1]))
+    .map(([t, ms]) => ({ t, ms }));
+}
+
+const GAP_MS = 5000;                            // chart line breaks on gaps longer than this
 
 const state = {
   // conn: 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'demo'
@@ -236,7 +261,7 @@ async function readBattery(server) {
 
 function onHeartRateNotification(event) {
   const m = parseHeartRate(event.target.value);
-  addReading(m.hr, m.rr, m.contact);
+  if (m) addReading(m.hr, m.rr, m.contact); // malformed packets are skipped
 }
 
 /**
@@ -244,7 +269,10 @@ function onHeartRateNotification(event) {
  * Byte 0 is a flags field telling us what follows.
  */
 function parseHeartRate(dv) {
+  // too short to hold the flags + BPM it claims → ignore it (returns null)
+  if (dv.byteLength < 2) return null;
   const flags = dv.getUint8(0);
+  if ((flags & 0x01) && dv.byteLength < 3) return null;
   let i = 1;
   let hr;
   if (flags & 0x01) { hr = dv.getUint16(i, true); i += 2; } // 16-bit BPM
@@ -404,14 +432,17 @@ function canResumeRestored() {
 async function restoreSession() {
   try {
     const saved = await sessionStore.load();
-    if (!saved || !saved.samples.length || state.samples.length) return; // nothing saved, or already recording
-    state.samples = saved.samples.map(([t, hr]) => ({ t, hr }));
-    state.rr = saved.rr.map(([t, ms]) => ({ t, ms }));
-    recomputeStats(saved.start);
+    if (!saved || state.samples.length) return; // nothing saved, or already recording
+    // check saved data like an imported file: other pages on the same site share this storage
+    const samples = cleanSamples(saved.samples);
+    if (!samples.length) return;
+    state.samples = samples;
+    state.rr = cleanRr(saved.rr);
+    recomputeStats(isValidTime(saved.start) ? saved.start : samples[0].t);
     state.lastSampleAt = state.samples[state.samples.length - 1].t;
     state.restored = true;
 
-    const from = new Date(saved.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const from = new Date(state.stats.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     setConn('idle', canResumeRestored()
       ? `Session from ${from} restored. Press Connect to continue it.`
       : `Session from ${from} restored. Connect will start a new one.`);
@@ -765,7 +796,10 @@ function renderZones() {
     z.el.style.setProperty('--fill', `${fill}%`);
     if (isActive) {
       z.el.style.setProperty('--pos', `${pct * 100}%`);
-      z.bpm.innerHTML = `${last.hr}<small>bpm</small>`;
+      // built as plain text (never HTML), so a reading can't inject markup
+      const unit = document.createElement('small');
+      unit.textContent = 'bpm';
+      z.bpm.replaceChildren(String(last.hr), unit);
     }
   });
 

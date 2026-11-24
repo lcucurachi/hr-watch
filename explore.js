@@ -144,20 +144,15 @@ async function importFile(file) {
     if (!obj || obj.app !== 'hrwatch' || !Array.isArray(obj.samples)) {
       throw new Error('this is not an HR Watch export file');
     }
-    const samples = obj.samples
-      .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && p[1] > 0)
-      .map(([t, hr]) => ({ t, hr }))
-      .sort((a, b) => a.t - b.t);
-    if (!samples.length) throw new Error('the file has no heart rate readings');
-    const rr = (Array.isArray(obj.rr) ? obj.rr : [])
-      .filter((p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))
-      .map(([t, ms]) => ({ t, ms }));
-    const age = Number(obj.age);
+    // only plausible values (see cleanSamples in app.js); anything else is skipped
+    const samples = cleanSamples(obj.samples);
+    if (!samples.length) throw new Error('the file has no valid heart rate readings');
+    const rr = cleanRr(obj.rr);
     setData({
       samples,
       rr,
-      start: Number.isFinite(obj.start) ? obj.start : samples[0].t,
-      age: age >= 10 && age <= 100 ? age : null,
+      start: isValidTime(obj.start) ? obj.start : samples[0].t,
+      age: Number.isInteger(obj.age) && obj.age >= 10 && obj.age <= 100 ? obj.age : null,
       label: `${file.name} · ${fmtDate(samples[0].t)}`,
     });
   } catch (err) {

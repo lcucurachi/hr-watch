@@ -4,7 +4,7 @@
 
 **Live heart rate from your Polar H10 (or any Bluetooth heart rate strap), right in your browser.**
 
-[**▶ Try it live**](https://lcucurachi.github.io/hrwatch/)
+[**▶ Try it live**](https://YOUR-USERNAME.github.io/YOUR-REPO/)
 
 ![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue)
 ![Free](https://img.shields.io/badge/price-free-brightgreen)
@@ -30,6 +30,8 @@ HR Watch is **free and open source**. It runs **entirely in your browser**: no i
 - **Reliable** — reconnects automatically if the signal drops, and a page reload doesn't lose your session
 - **Settings** — light and dark mode, max heart rate formula or override, CSV separator for Excel, screen-awake and more, remembered in your browser
 - **Demo mode** — try everything without a strap
+
+> **About the zones:** max heart rate is estimated from your age (10–100) with `220 − age` or `208 − 0.7 × age`. These formulas are averages from studies of adults and can be off by 10+ bpm, and they don't suit young children. If you know your real max heart rate, enter it as an override in Settings (100–240 bpm) and the age is ignored.
 
 ## Browser support
 
