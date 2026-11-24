@@ -4,13 +4,18 @@
   <meta charset="utf-8">
   <script>
     // ===== APP VERSION: change this when you release (match your git tag) =====
-    const APP_VERSION = '1.1.4';
+    const APP_VERSION = '1.2.0';
     // Shown in ⚙ Settings, and added to the CSS/JS links (?v=…) so browsers
     // download fresh files after each release instead of reusing old cached ones.
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0d1014">
   <title>HR Watch</title>
+  <!-- installable app: name, icons, full-screen (see manifest.webmanifest and sw.js) -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="HR Watch">
   <script>
     // Apply the saved light/dark choice before the page draws, so it doesn't flash.
     // No saved choice = follow the device's setting. (The ☀/☾ button is wired in app.js.)
@@ -339,6 +344,16 @@
     // app scripts, in this order, tagged with APP_VERSION (see the top of this file)
     for (const file of ['storage.js', 'app.js', 'explore.js', 'tooltip.js', 'help.js']) {
       document.write(`<script src="${file}?v=${APP_VERSION}"><\/script>`);
+    }
+  </script>
+  <script>
+    // Installable app + offline use (see sw.js). Limited to this app's folder (scope './'),
+    // so it never touches other projects on the same site.
+    // Skipped on localhost so your edits show up while developing; add ?sw to the address to test it locally.
+    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    if ('serviceWorker' in navigator && (!isLocal || new URLSearchParams(location.search).has('sw'))) {
+      navigator.serviceWorker.register(`sw.js?v=${APP_VERSION}`, { scope: './' })
+        .catch((e) => console.warn('Service worker not registered', e));
     }
   </script>
 </body>

@@ -43,9 +43,18 @@ HR Watch is **free and open source**. It runs **entirely in your browser**: no i
 | Chrome, Edge (Windows, Mac, Android) | ✅ Out of the box |
 | Brave | ⚙️ Enable `brave://flags/#brave-web-bluetooth-api` |
 | Firefox, Safari | ❌ No Web Bluetooth |
-| iPhone / iPad | ⚙️ Use the free [Bluefy](https://apps.apple.com/app/id1492822055) browser |
+| iPhone / iPad | ⚙️ Safari with the [WebBLE](https://apps.apple.com/app/id6761301368) extension, or the free [Bluefy](https://apps.apple.com/app/id1492822055) browser |
 
 The in-app **Help** button has step-by-step instructions for each one.
+
+## Install as an app
+
+HR Watch can be installed like an app: its own icon, a full-screen window, and it opens offline.
+
+- **Android, Windows, Mac (Chrome / Edge):** use **Install app** in the browser menu or the install icon in the address bar.
+- **iPhone / iPad:** Share → **Add to Home Screen**. ⚠️ Bluetooth most likely **won't work** in the Home Screen app, because Safari extensions like WebBLE don't run there. Keep recording in Safari + WebBLE (or Bluefy); the installed app is still handy for **Explore**.
+
+Installing changes nothing about privacy: it's the same page, still with no server and nothing sent anywhere.
 
 ## Run it yourself
 
@@ -55,11 +64,11 @@ No build step and no dependencies, just static files. Clone the repo, then serve
 python -m http.server 8000
 ```
 
-Open <http://localhost:8000>, press **Connect** and pick your strap. Any static host works too, e.g. GitHub Pages.
+Open <http://localhost:8000>, press **Connect** and pick your strap. Any static host works too, e.g. GitHub Pages. The offline/install support is switched off on `localhost` so your edits show up immediately; open <http://localhost:8000/?sw> to test it.
 
 ## Releasing
 
-To release, change `APP_VERSION` at the top of [`index.html`](index.html) to match the new tag, then commit and tag as usual. The version is shown in ⚙ Settings and added to the CSS/JS links, so browsers download fresh files instead of mixing old cached ones with a new release.
+To release, change `APP_VERSION` at the top of [`index.html`](index.html) to match the new tag, then commit and tag as usual. The version is shown in ⚙ Settings and added to the CSS/JS links, so browsers download fresh files instead of mixing old cached ones with a new release. The installed app's offline copy updates from the same number.
 
 ## License
 
