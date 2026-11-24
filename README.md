@@ -23,8 +23,8 @@ HR Watch is **free and open source**. It runs **entirely in your browser**: no i
 
 ## Features
 
-- **Live** — big BPM readout, max / average / min, session timer, chart of the last 1–30 minutes
-- **Heart rate zones** — the 5 standard training zones from your age or your own max heart rate, shown as columns with a cursor moving through the current zone, plus time spent in each zone
+- **Graph Mode** — big BPM readout, max / average / min, session timer, chart of the last 1–30 minutes
+- **Zone Mode** — the 5 standard training zones from your age or your own max heart rate, shown as columns with a cursor moving through the current zone, plus time spent in each zone
 - **Explore** — zoom and drag through a whole session, with stats for the visible part and an overview strip
 - **Export / import** — save sessions as JSON (re-importable) or CSV (spreadsheets), all as local files
 - **Reliable** — reconnects automatically if the signal drops, and a page reload doesn't lose your session
