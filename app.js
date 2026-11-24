@@ -91,7 +91,7 @@ const SETTINGS = {
   saveLocal:      { def: true,      valid: isBool },
   csvSep:         { def: ',',       valid: (v) => v === ',' || v === ';' },
   theme:          { def: null,      valid: (v) => v === null || v === 'light' || v === 'dark' }, // null = follow device
-  keepAlive:      { def: false,     valid: isBool }, // experimental: inaudible tone so the page isn't frozen in the background
+  keepAlive:      { def: false,     valid: isBool }, // experimental, off by default: inaudible tone so the page isn't frozen in the background
 };
 
 const settings = {};
@@ -884,10 +884,14 @@ const KEEP_ALIVE_HZ = 15;
 const KEEP_ALIVE_LEVEL = 0.03; // about −30 dB below full volume
 let keepAliveAudio = null;
 
-/** A 1-second looping 15 Hz sine wave as a WAV file (15 full cycles, so the loop is seamless). */
+/**
+ * A 10-second looping 15 Hz sine wave as a WAV file (150 full cycles, so the loop is seamless).
+ * 10 s rather than 1 s because Android Chrome only shows a media notification for audio
+ * at least 5 s long; shorter clips count as sound effects.
+ */
 function makeKeepAliveTone() {
   const rate = 8000;
-  const n = rate; // 1 second
+  const n = rate * 10; // 10 seconds (~160 KB, generated in memory)
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
   const text = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
@@ -1094,6 +1098,10 @@ window.addEventListener('load', () => {
   els.unsupported.hidden = !!getBluetooth();
   setConn(state.conn, els.statusText.textContent);
 });
+
+// version shown at the bottom of Settings (APP_VERSION is set at the top of index.html)
+$('appVersion').textContent = `HR Watch v${typeof APP_VERSION === 'string' ? APP_VERSION : 'dev'}`;
+
 applyTheme();
 buildZones();
 syncAgeInputs();

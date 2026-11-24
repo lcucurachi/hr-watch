@@ -29,10 +29,12 @@ HR Watch is **free and open source**. It runs **entirely in your browser**: no i
 - **Export / import** — save sessions as JSON (re-importable) or CSV (spreadsheets), all as local files
 - **Reliable** — reconnects automatically if the signal drops, and a page reload doesn't lose your session
 - **Settings** — light and dark mode, max heart rate formula or override, CSV separator for Excel, screen-awake and more, remembered in your browser
-- **Background recording (experimental)** — an optional setting that plays an inaudible 15 Hz tone while recording, so the phone is less likely to pause the app when you switch away; usually works on Android Chrome, usually not on iPhone
+- **Background recording (experimental, off by default)** — keeps recording when you switch to another app on your phone; see the note below
 - **Demo mode** — try everything without a strap
 
 > **About the zones:** max heart rate is estimated from your age (10–100) with `220 − age` or `208 − 0.7 × age`. These formulas are averages from studies of adults and can be off by 10+ bpm, and they don't suit young children. If you know your real max heart rate, enter it as an override in Settings (100–240 bpm) and the age is ignored.
+
+> **About background recording (experimental):** phones normally pause a web page soon after you switch to another app, which stops the readings. To prevent that, HR Watch plays an **inaudible 15 Hz tone** while recording (below human hearing and below what phone speakers can reproduce). It is **off by default**: turn it on in **⚙ Settings → Experimental**. While active it shows a **♪ keep-alive** badge, and your phone may also show it as media playing. It works on Android Chrome and on iPhone in Safari with the WebBLE extension; other browsers are untested. It uses a bit more battery.
 
 ## Browser support
 
@@ -54,6 +56,10 @@ python -m http.server 8000
 ```
 
 Open <http://localhost:8000>, press **Connect** and pick your strap. Any static host works too, e.g. GitHub Pages.
+
+## Releasing
+
+To release, change `APP_VERSION` at the top of [`index.html`](index.html) to match the new tag, then commit and tag as usual. The version is shown in ⚙ Settings and added to the CSS/JS links, so browsers download fresh files instead of mixing old cached ones with a new release.
 
 ## License
 

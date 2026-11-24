@@ -2,6 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script>
+    // ===== APP VERSION: change this when you release (match your git tag) =====
+    const APP_VERSION = '1.1.4';
+    // Shown in ⚙ Settings, and added to the CSS/JS links (?v=…) so browsers
+    // download fresh files after each release instead of reusing old cached ones.
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0d1014">
   <title>HR Watch</title>
@@ -14,7 +20,7 @@
         : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
     } catch { document.documentElement.dataset.theme = 'dark'; }
   </script>
-  <link rel="stylesheet" href="style.css">
+  <script>document.write(`<link rel="stylesheet" href="style.css?v=${APP_VERSION}">`);</script>
 </head>
 <body>
   <header class="topbar">
@@ -124,11 +130,13 @@
       <h3 class="setting-group">Experimental</h3>
       <label class="toggle"><input type="checkbox" id="setKeepAlive"> Keep recording in the background</label>
       <p class="setting-desc">
-        Plays an inaudible 15 Hz tone while recording, so the phone is less likely to pause the app when you switch
-        to another app. Usually works on Android Chrome; usually doesn't work on iPhone. Uses a bit more battery.
+        Off by default. Plays an inaudible 15 Hz tone while recording, so the phone doesn't pause the app when you
+        switch to another app. Works on Android Chrome and on iPhone in Safari with the WebBLE extension; other
+        browsers are untested. Uses a bit more battery. Turn it on if you want to keep recording in the background.
       </p>
 
       <p class="help-note">Settings are saved in this browser as soon as you change them.</p>
+      <p class="help-note" id="appVersion"></p>
     </div>
   </dialog>
 
@@ -327,10 +335,11 @@
     </section>
   </main>
 
-  <script src="storage.js"></script>
-  <script src="app.js"></script>
-  <script src="explore.js"></script>
-  <script src="tooltip.js"></script>
-  <script src="help.js"></script>
+  <script>
+    // app scripts, in this order, tagged with APP_VERSION (see the top of this file)
+    for (const file of ['storage.js', 'app.js', 'explore.js', 'tooltip.js', 'help.js']) {
+      document.write(`<script src="${file}?v=${APP_VERSION}"><\/script>`);
+    }
+  </script>
 </body>
 </html>
