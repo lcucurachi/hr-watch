@@ -689,7 +689,7 @@ function drawChart() {
   }
 }
 
-/* ===================================================== zones (Mode 2) */
+/* ================================================== zones (Zone Mode) */
 // Standard 5-zone model as % of max heart rate (from age + formula, or the override setting).
 
 const ZONES = [
@@ -815,7 +815,7 @@ function renderZones() {
   }
 }
 
-// Age appears in two places (Mode 2 and Settings); both edit the same setting.
+// Age appears in two places (Zone Mode and Settings); both edit the same setting.
 const ageInput = $('ageInput');
 const setAgeInput = $('setAge');
 

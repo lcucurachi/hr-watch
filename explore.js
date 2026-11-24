@@ -641,8 +641,7 @@ exEls.jsonBtn.addEventListener('click', exportJson);
 exEls.csvBtn.addEventListener('click', exportCsv);
 exEls.clearBtn.addEventListener('click', () => setData(null));
 
-// age changes in Mode 2 update zones here too
-// age / formula / max HR changes in Settings or Mode 2 update zones here too
+// age / formula / max HR changes in Settings or Zone Mode update zones here too
 document.addEventListener('hrwatch:settings', (e) => {
   if (e.detail === 'theme') { readZoneColors(); requestExDraw(); }
   if (ex.data && ['age', 'formula', 'maxOverride'].includes(e.detail)) renderExplorer();

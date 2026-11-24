@@ -212,15 +212,15 @@
 
   <nav class="tabs" role="tablist">
     <button class="tab active" role="tab" data-mode="1" aria-selected="true"
-            data-tip="Live heart rate, session stats and chart.">Mode 1 · Live</button>
+            data-tip="Live heart rate, session stats and chart.">Graph Mode</button>
     <button class="tab" role="tab" data-mode="2" aria-selected="false"
-            data-tip="Heart rate zones based on your age.">Mode 2</button>
+            data-tip="Heart rate zones based on your age.">Zone Mode</button>
     <button class="tab" role="tab" data-mode="3" aria-selected="false"
             data-tip="Explore, import and export recorded data.">Explore</button>
   </nav>
 
   <main>
-    <!-- MODE 1: live number + stats + chart -->
+    <!-- GRAPH MODE (tab 1): live number + stats + chart -->
     <section class="mode" id="mode1">
       <div class="hero">
         <div class="heart" id="heart" aria-hidden="true">
@@ -255,7 +255,7 @@
       </div>
     </section>
 
-    <!-- MODE 2: heart rate zone bars -->
+    <!-- ZONE MODE (tab 2): heart rate zone bars -->
     <section class="mode" id="mode2" hidden>
       <div class="zone-top">
         <div class="zone-now" id="zoneNow">--</div>
