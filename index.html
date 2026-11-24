@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1014">
+  <title>HR Watch</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">HR Watch</div>
+
+    <div class="status" id="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Not connected</span>
+      <span class="battery" id="battery" hidden></span>
+    </div>
+
+    <div class="actions">
+      <button id="helpBtn" class="btn ghost" data-tip="How to enable Bluetooth in your browser.">Help</button>
+      <button id="demoBtn" class="btn ghost">Demo</button>
+      <button id="connectBtn" class="btn primary">Connect</button>
+    </div>
+  </header>
+
+  <div class="banner" id="unsupported" hidden>
+    This browser can't use Bluetooth. Use Chrome or Edge on a computer or Android phone.
+    On iPhone, open this page in the <strong>Bluefy</strong> browser. You can still try <strong>Demo</strong>.
+    <a href="#" id="unsupportedHelp">How to fix</a>
+  </div>
+
+  <!-- HELP: how to enable Web Bluetooth per browser -->
+  <dialog id="helpDialog" class="help" aria-labelledby="helpTitle">
+    <div class="help-inner">
+      <div class="help-head">
+        <h2 id="helpTitle">Enable Bluetooth in your browser</h2>
+        <button class="help-close" id="helpClose" aria-label="Close help">✕</button>
+      </div>
+      <p class="help-intro">
+        HR Watch talks to your strap using <strong>Web Bluetooth</strong>, a browser feature that not every browser has.
+        Find your browser below. Settings addresses can't be opened by a link, so copy them and paste them into the address bar.
+      </p>
+
+      <details class="help-item" data-browser="chrome">
+        <summary>Chrome <span class="badge ok">Works</span> <span class="yours">Your browser</span></summary>
+        <div class="help-body">
+          <p>Works by default on Windows and Mac. If Connect doesn't find your strap:</p>
+          <ol>
+            <li>Turn Bluetooth on in your system settings.</li>
+            <li><strong>Mac only:</strong> System Settings → Privacy &amp; Security → Bluetooth → allow <em>Google Chrome</em>.</li>
+            <li>Open <code>chrome://settings/content/bluetoothDevices</code>
+              <button class="copy" data-copy="chrome://settings/content/bluetoothDevices">Copy</button>
+              and choose <em>Sites can ask to connect to Bluetooth devices</em>.</li>
+            <li><strong>Linux only:</strong> open <code>chrome://flags/#enable-experimental-web-platform-features</code>
+              <button class="copy" data-copy="chrome://flags/#enable-experimental-web-platform-features">Copy</button>,
+              set it to <em>Enabled</em> and press <em>Relaunch</em>.</li>
+          </ol>
+        </div>
+      </details>
+
+      <details class="help-item" data-browser="brave">
+        <summary>Brave <span class="badge setup">Needs a setting</span> <span class="yours">Your browser</span></summary>
+        <div class="help-body">
+          <p>Brave turns Web Bluetooth off by default. You'll see the error <em>"Web Bluetooth API globally disabled"</em>.</p>
+          <ol>
+            <li>Open <code>brave://flags/#brave-web-bluetooth-api</code>
+              <button class="copy" data-copy="brave://flags/#brave-web-bluetooth-api">Copy</button></li>
+            <li>Set <em>Web Bluetooth API</em> to <em>Enabled</em>.</li>
+            <li>Press <em>Relaunch</em> at the bottom of the page.</li>
+          </ol>
+          <p class="help-note">Still not working? Check that Bluetooth is on in your system and, on Mac, that Brave is allowed under
+            System Settings → Privacy &amp; Security → Bluetooth.</p>
+        </div>
+      </details>
+
+      <details class="help-item" data-browser="firefox">
+        <summary>Firefox <span class="badge no">Not supported</span> <span class="yours">Your browser</span></summary>
+        <div class="help-body">
+          <p>Firefox doesn't have Web Bluetooth, and there is no setting to turn it on.
+            Open HR Watch in <strong>Chrome</strong> or <strong>Brave</strong> instead.</p>
+        </div>
+      </details>
+
+      <details class="help-item" data-browser="safari">
+        <summary>Safari (Mac) <span class="badge no">Not supported</span> <span class="yours">Your browser</span></summary>
+        <div class="help-body">
+          <p>Safari doesn't have Web Bluetooth, and there is no setting to turn it on.
+            Open HR Watch in <strong>Chrome</strong> or <strong>Brave</strong> instead.</p>
+        </div>
+      </details>
+
+      <details class="help-item" data-browser="ios">
+        <summary>iPhone &amp; iPad <span class="badge setup">Needs an add-on</span> <span class="yours">Your device</span></summary>
+        <div class="help-body">
+          <p>Every browser on iPhone, Safari and Chrome included, runs on Apple's engine, which has no Web Bluetooth.
+            One of these add-ons fills the gap:</p>
+
+          <h4>Option 1: Bluefy (recommended)</h4>
+          <ol>
+            <li>Install <a href="https://apps.apple.com/app/id1492822055" target="_blank" rel="noopener">Bluefy – Web BLE Browser</a> from the App Store (free).</li>
+            <li>Open this app's web address in Bluefy.</li>
+            <li>Allow Bluetooth when asked. If you said no: Settings → Bluefy → turn on <em>Bluetooth</em>.</li>
+          </ol>
+
+          <h4>Option 2: WebBLE Safari extension (iOS 26 or later)</h4>
+          <ol>
+            <li>Install <a href="https://apps.apple.com/app/id6761301368" target="_blank" rel="noopener">WebBLE</a> from the App Store.</li>
+            <li>Open Settings → Apps → Safari → Extensions → <em>WebBLE</em> and turn it on.</li>
+            <li>Open this app in Safari and allow WebBLE on this website when asked.</li>
+          </ol>
+          <p class="help-note">WebBLE support in HR Watch hasn't been tested yet. If it doesn't connect, use Bluefy.</p>
+
+          <p class="help-note"><strong>Important:</strong> on iPhone the app must be opened from an <code>https://</code> address
+            (for example GitHub Pages). An address from your computer's local network won't work.</p>
+        </div>
+      </details>
+    </div>
+  </dialog>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" role="tab" data-mode="1" aria-selected="true"
+            data-tip="Live heart rate, session stats and chart.">Mode 1 · Live</button>
+    <button class="tab" role="tab" data-mode="2" aria-selected="false"
+            data-tip="Heart rate zones based on your age.">Mode 2</button>
+    <button class="tab" role="tab" data-mode="3" aria-selected="false"
+            data-tip="Explore, import and export recorded data.">Explore</button>
+  </nav>
+
+  <main>
+    <!-- MODE 1: live number + stats + chart -->
+    <section class="mode" id="mode1">
+      <div class="hero">
+        <div class="heart" id="heart" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.1 0 3.6 1.1 4.3 2.4h2c.7-1.3 2.2-2.4 4.3-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>
+        </div>
+        <div class="bpm">
+          <span class="bpm-value" id="bpmValue">--</span>
+          <span class="bpm-unit">bpm</span>
+        </div>
+        <div class="contact" id="contact" hidden>No skin contact — wet the strap electrodes</div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Max</div><div class="stat-value" id="statMax">--</div></div>
+        <div class="stat"><div class="stat-label">Average</div><div class="stat-value" id="statAvg">--</div></div>
+        <div class="stat"><div class="stat-label">Min</div><div class="stat-value" id="statMin">--</div></div>
+        <div class="stat"><div class="stat-label">Session</div><div class="stat-value" id="statTime">0:00</div></div>
+      </div>
+
+      <div class="card chart-card">
+        <div class="chart-head">
+          <div class="segmented" id="windowPicker" role="group" aria-label="Chart time window">
+            <button data-min="1" data-tip="Show the last 1 minute on the chart.">1m</button>
+            <button data-min="5" class="active" data-tip="Show the last 5 minutes on the chart.">5m</button>
+            <button data-min="10" data-tip="Show the last 10 minutes on the chart.">10m</button>
+            <button data-min="30" data-tip="Show the last 30 minutes on the chart.">30m</button>
+          </div>
+          <button id="resetBtn" class="btn ghost small"
+                  data-tip="Clear the chart, stats and time in zones for the current session.">Reset</button>
+        </div>
+        <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- MODE 2: heart rate zone bars -->
+    <section class="mode" id="mode2" hidden>
+      <div class="zone-top">
+        <div class="zone-now" id="zoneNow">--</div>
+        <label class="age-field">
+          Age
+          <input id="ageInput" type="number" min="10" max="100" inputmode="numeric" placeholder="--"
+                 data-tip="Used to calculate your max heart rate (220 − age).">
+          <span class="muted">Max HR <strong id="hrMaxValue">--</strong></span>
+        </label>
+      </div>
+      <div class="zones-hint" id="zonesHint">Enter your age to calculate your heart rate zones.</div>
+      <div class="zones" id="zones"><!-- bars built by app.js --></div>
+    </section>
+
+    <!-- EXPLORE: look at imported files or a snapshot of the live session -->
+    <section class="mode" id="mode3" hidden>
+      <div class="ex-toolbar">
+        <div class="ex-actions">
+          <button id="exImportBtn" class="btn"
+                  data-tip="Open an exported .json file. Shown here only, not added to the live session.">Import</button>
+          <button id="exLiveBtn" class="btn"
+                  data-tip="Copy the current live session here as a snapshot.">Load live data</button>
+          <button id="exJsonBtn" class="btn ghost"
+                  data-tip="Save the data shown here as a .json file you can import later.">Export JSON</button>
+          <button id="exCsvBtn" class="btn ghost"
+                  data-tip="Save the data shown here as a spreadsheet file (time, bpm, zone).">Export CSV</button>
+          <button id="exClearBtn" class="btn ghost"
+                  data-tip="Remove the data from the explorer. The live session isn't affected.">Clear</button>
+          <input id="exFile" type="file" accept=".json,application/json" hidden>
+        </div>
+        <div class="ex-source" id="exSource"></div>
+      </div>
+
+      <div class="card ex-empty" id="exEmpty">
+        <div class="ex-empty-title">Nothing to explore yet</div>
+        <p><strong>Import</strong> an exported file, or <strong>Load live data</strong> to take a snapshot of the current session.</p>
+      </div>
+
+      <div id="exBody" hidden>
+        <div class="stats">
+          <div class="stat"><div class="stat-label">Duration</div><div class="stat-value" id="exDur">--</div></div>
+          <div class="stat"><div class="stat-label">Average</div><div class="stat-value" id="exAvg">--</div></div>
+          <div class="stat"><div class="stat-label">Max</div><div class="stat-value" id="exMax">--</div></div>
+          <div class="stat"><div class="stat-label">Min</div><div class="stat-value" id="exMin">--</div></div>
+        </div>
+
+        <div class="card">
+          <div class="ex-inview" id="exInView"></div>
+          <div class="ex-chart-wrap" id="exChartWrap"><canvas id="exChart"></canvas></div>
+          <div class="ex-overview-wrap"><canvas id="exOverview"></canvas></div>
+          <div class="ex-hint">Scroll or pinch to zoom · drag to move · double-click to show everything · drag the strip below to jump</div>
+        </div>
+
+        <div class="card ex-zones">
+          <div class="ex-zones-title">Time in zones <span class="muted" id="exZonesNote"></span></div>
+          <div id="exZones"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+  <script src="explore.js"></script>
+  <script src="tooltip.js"></script>
+  <script src="help.js"></script>
+</body>
+</html>
