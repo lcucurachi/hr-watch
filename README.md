@@ -11,7 +11,7 @@
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 ![No tracking](https://img.shields.io/badge/tracking-none-lightgrey)
 
-<img src="docs/screenshot.jpg" alt="HR Watch showing live heart rate, session stats and a 5-minute chart" width="480">
+<img src="docs/screenshot.jpg" alt="HR Watch heart rate zones view: Zone 3 highlighted at 135 bpm, with time spent in each of the five zones" width="480">
 
 </div>
 

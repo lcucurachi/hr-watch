@@ -17,8 +17,7 @@
   --tooltip-bg: #262c35;
   --shadow: rgba(0, 0, 0, 0.5);
   --backdrop: rgba(0, 0, 0, 0.6);
-  --cursor: #ffffff;                       /* Mode 2 zone cursor */
-  --cursor-glow: rgba(255, 255, 255, 0.8);
+  --cursor: rgba(255, 255, 255, 0.22);     /* Mode 2 zone cursor: faint, sits behind the text */
   --zone-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   --radius: 14px;
   --beat: 1s;
@@ -45,8 +44,7 @@
   --tooltip-bg: #ffffff;
   --shadow: rgba(20, 30, 50, 0.16);
   --backdrop: rgba(20, 25, 35, 0.35);
-  --cursor: #121820;
-  --cursor-glow: rgba(18, 24, 32, 0.35);
+  --cursor: rgba(18, 24, 32, 0.22);
   --zone-shadow: none;
   /* darker zone colors so they stay readable on white */
   --z1: #7d8794;
@@ -278,13 +276,13 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .zone-bpm small { display: block; font-size: 0.25em; font-weight: 600; opacity: 0.8; margin-top: 4px; }
 .zone.active .zone-bpm { display: block; }
 
-/* the cursor marking where you are inside the zone */
+/* the cursor marking where you are inside the zone:
+   a faint gray line drawn behind the text (z-index 0 < .zone-content's 1), so it never covers the BPM */
 .zone-cursor {
-  position: absolute; top: 0; bottom: 0; z-index: 2;
+  position: absolute; top: 0; bottom: 0; z-index: 0;
   left: var(--pos, 0%);
-  width: 4px; margin-left: -2px;
+  width: 3px; margin-left: -1.5px;
   background: var(--cursor);
-  box-shadow: 0 0 10px var(--cursor-glow);
   opacity: 0;
   transition: left 0.8s ease, opacity 0.3s;
 }
