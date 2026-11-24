@@ -29,6 +29,7 @@ HR Watch is **free and open source**. It runs **entirely in your browser**: no i
 - **Export / import** — save sessions as JSON (re-importable) or CSV (spreadsheets), all as local files
 - **Reliable** — reconnects automatically if the signal drops, and a page reload doesn't lose your session
 - **Settings** — light and dark mode, max heart rate formula or override, CSV separator for Excel, screen-awake and more, remembered in your browser
+- **Background recording (experimental)** — an optional setting that plays an inaudible 15 Hz tone while recording, so the phone is less likely to pause the app when you switch away; usually works on Android Chrome, usually not on iPhone
 - **Demo mode** — try everything without a strap
 
 > **About the zones:** max heart rate is estimated from your age (10–100) with `220 − age` or `208 − 0.7 × age`. These formulas are averages from studies of adults and can be off by 10+ bpm, and they don't suit young children. If you know your real max heart rate, enter it as an override in Settings (100–240 bpm) and the age is ignored.

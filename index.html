@@ -24,6 +24,8 @@
       <span class="dot" id="statusDot"></span>
       <span id="statusText">Not connected</span>
       <span class="battery" id="battery" hidden></span>
+      <span class="battery" id="keepAliveBadge" hidden
+            data-tip="Background keep-alive is on (experimental, see Settings).">♪ keep-alive</span>
     </div>
 
     <div class="actions">
@@ -117,6 +119,14 @@
         <button id="deleteDataBtn" class="btn danger">Delete saved data</button>
         <p class="setting-desc">Deletes the saved session and all settings from this browser, then reloads the app.</p>
       </div>
+
+      <!-- Experimental -->
+      <h3 class="setting-group">Experimental</h3>
+      <label class="toggle"><input type="checkbox" id="setKeepAlive"> Keep recording in the background</label>
+      <p class="setting-desc">
+        Plays an inaudible 15 Hz tone while recording, so the phone is less likely to pause the app when you switch
+        to another app. Usually works on Android Chrome; usually doesn't work on iPhone. Uses a bit more battery.
+      </p>
 
       <p class="help-note">Settings are saved in this browser as soon as you change them.</p>
     </div>

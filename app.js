@@ -13,6 +13,7 @@ const els = {
   statusDot: $('statusDot'),
   statusText: $('statusText'),
   battery: $('battery'),
+  keepAliveBadge: $('keepAliveBadge'),
   unsupported: $('unsupported'),
   bpmValue: $('bpmValue'),
   heart: $('heart'),
@@ -90,6 +91,7 @@ const SETTINGS = {
   saveLocal:      { def: true,      valid: isBool },
   csvSep:         { def: ',',       valid: (v) => v === ',' || v === ';' },
   theme:          { def: null,      valid: (v) => v === null || v === 'light' || v === 'dark' }, // null = follow device
+  keepAlive:      { def: false,     valid: isBool }, // experimental: inaudible tone so the page isn't frozen in the background
 };
 
 const settings = {};
@@ -145,6 +147,11 @@ function applySetting(key) {
       break;
     case 'theme':
       applyTheme();
+      break;
+    case 'keepAlive':
+      // the checkbox click counts as a tap, so the browser allows starting the sound here
+      if (settings.keepAlive && (live || state.conn === 'reconnecting')) startKeepAlive();
+      else stopKeepAlive();
       break;
     case 'saveLocal':
       if (settings.saveLocal) saveWholeSession();
@@ -473,6 +480,7 @@ function setConn(conn, text) {
   els.demoBtn.textContent = conn === 'demo' ? 'Stop demo' : 'Demo';
   els.demoBtn.classList.toggle('active', conn === 'demo');
   els.demoBtn.disabled = bleActive;
+  if (conn === 'idle') stopKeepAlive(); // not recording any more (disconnect, demo stopped, picker closed…)
   renderLive();
 }
 
@@ -865,6 +873,61 @@ systemLight.addEventListener('change', () => {
   }
 });
 
+/* ============================== background keep-alive (experimental) */
+// Phones pause a web page's code soon after you switch to another app, which
+// stops the heart rate readings. Chrome doesn't freeze a tab that is playing
+// sound, so while recording (when the setting is on) we loop a 15 Hz tone:
+// below human hearing and below what phone speakers can reproduce, but still
+// a real, non-silent signal for the browser. Usually has no effect on iPhone.
+
+const KEEP_ALIVE_HZ = 15;
+const KEEP_ALIVE_LEVEL = 0.03; // about −30 dB below full volume
+let keepAliveAudio = null;
+
+/** A 1-second looping 15 Hz sine wave as a WAV file (15 full cycles, so the loop is seamless). */
+function makeKeepAliveTone() {
+  const rate = 8000;
+  const n = rate; // 1 second
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const text = (at, s) => { for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i)); };
+  text(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); text(8, 'WAVE');
+  text(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  text(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    v.setInt16(44 + i * 2, Math.round(Math.sin((2 * Math.PI * KEEP_ALIVE_HZ * i) / rate) * KEEP_ALIVE_LEVEL * 32767), true);
+  }
+  return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+}
+
+function renderKeepAliveBadge() {
+  els.keepAliveBadge.hidden = !(keepAliveAudio && !keepAliveAudio.paused);
+}
+
+/** Start the tone. Must be called right after a tap/click, or the browser blocks the sound. */
+function startKeepAlive() {
+  if (!settings.keepAlive) return;
+  if (!keepAliveAudio) {
+    keepAliveAudio = new Audio(makeKeepAliveTone());
+    keepAliveAudio.loop = true;
+    keepAliveAudio.addEventListener('play', renderKeepAliveBadge);
+    keepAliveAudio.addEventListener('pause', renderKeepAliveBadge);
+  }
+  keepAliveAudio.play()
+    .then(() => {
+      // name shown in the phone's media notification / lock screen
+      if ('mediaSession' in navigator && 'MediaMetadata' in window) {
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'HR Watch', artist: 'Recording heart rate' });
+      }
+    })
+    .catch((e) => console.warn('Keep-alive sound was blocked', e));
+}
+
+function stopKeepAlive() {
+  if (keepAliveAudio && !keepAliveAudio.paused) keepAliveAudio.pause();
+}
+
 /* ======================================================= screen wake lock */
 // Keeps the screen from sleeping while you're watching your heart rate.
 
@@ -892,12 +955,15 @@ document.addEventListener('visibilitychange', () => {
 
 els.connectBtn.addEventListener('click', () => {
   if (['connected', 'connecting', 'reconnecting'].includes(state.conn)) disconnect();
-  else connect();
+  else {
+    connect();
+    startKeepAlive(); // after connect() so stopping a running demo doesn't cancel it; still within this click
+  }
 });
 
 els.demoBtn.addEventListener('click', () => {
   if (state.conn === 'demo') { stopDemo(); releaseWakeLock(); }
-  else { startDemo(); requestWakeLock(); }
+  else { startDemo(); requestWakeLock(); startKeepAlive(); }
 });
 
 els.resetBtn.addEventListener('click', resetSession);
@@ -917,6 +983,7 @@ function fillSettingsForm() {
   $('setReconnect').value = settings.reconnectTries;
   $('resumeInput').value = settings.resumeMin;
   $('setSaveLocal').checked = settings.saveLocal;
+  $('setKeepAlive').checked = settings.keepAlive;
   for (const r of document.querySelectorAll('input[name="setFormula"]')) r.checked = r.value === settings.formula;
   for (const r of document.querySelectorAll('input[name="setCsvSep"]')) r.checked = r.value === settings.csvSep;
   renderMaxUsed();
@@ -963,6 +1030,7 @@ bindNumber('setReconnect', 'reconnectTries');
 bindNumber('resumeInput', 'resumeMin');
 bindCheckbox('setSaveLocal', 'saveLocal');
 bindRadios('setCsvSep', 'csvSep');
+bindCheckbox('setKeepAlive', 'keepAlive');
 
 $('settingsBtn').addEventListener('click', () => {
   fillSettingsForm();
