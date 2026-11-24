@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0d1014">
   <title>HR Watch</title>
+  <script>
+    // Apply the saved light/dark choice before the page draws, so it doesn't flash.
+    // No saved choice = follow the device's setting. (The ☀/☾ button is wired in app.js.)
+    try {
+      const t = JSON.parse(localStorage.getItem('hrwatch.theme'));
+      document.documentElement.dataset.theme = t === 'light' || t === 'dark' ? t
+        : (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    } catch { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,9 +27,12 @@
     </div>
 
     <div class="actions">
-      <button id="helpBtn" class="btn ghost" data-tip="How to enable Bluetooth in your browser.">Help</button>
+      <button id="settingsBtn" class="btn ghost icon" aria-label="Settings"
+              data-tip="Settings, saved in this browser.">⚙</button>
+      <button id="helpBtn" class="btn ghost" aria-label="Help" data-tip="How to enable Bluetooth in your browser."><span class="label-long">Help</span><span class="label-short" aria-hidden="true">?</span></button>
       <button id="demoBtn" class="btn ghost">Demo</button>
       <button id="connectBtn" class="btn primary">Connect</button>
+      <button id="themeBtn" class="btn ghost icon" aria-label="Switch to light mode" data-tip="Switch to light mode.">☀&#xFE0E;</button>
     </div>
   </header>
 
@@ -29,6 +41,86 @@
     On iPhone, open this page in the <strong>Bluefy</strong> browser. You can still try <strong>Demo</strong>.
     <a href="#" id="unsupportedHelp">How to fix</a>
   </div>
+
+  <!-- SETTINGS -->
+  <dialog id="settingsDialog" class="help" aria-labelledby="settingsTitle">
+    <div class="help-inner">
+      <div class="help-head">
+        <h2 id="settingsTitle">Settings</h2>
+        <button class="help-close" id="settingsClose" aria-label="Close settings">✕</button>
+      </div>
+
+      <!-- Heart rate -->
+      <h3 class="setting-group">Heart rate</h3>
+      <div class="setting setting-inline">
+        <label class="setting-label" for="setAge">Age</label>
+        <input id="setAge" type="number" min="10" max="100" step="1" inputmode="numeric" placeholder="--">
+      </div>
+      <div class="setting">
+        <span class="setting-label">Max heart rate formula</span>
+        <div class="choice-row">
+          <label class="choice"><input type="radio" name="setFormula" value="classic"> 220 − age</label>
+          <label class="choice"><input type="radio" name="setFormula" value="tanaka"> 208 − 0.7 × age <span class="muted">(often closer for 40+)</span></label>
+        </div>
+      </div>
+      <div class="setting">
+        <label class="setting-label" for="setMaxOverride">Max heart rate override</label>
+        <p class="setting-desc">If you know your real max heart rate (e.g. from a test), enter it here. It replaces the formula everywhere. Leave empty to use the formula.</p>
+        <div class="setting-row">
+          <input id="setMaxOverride" type="number" min="100" max="240" step="1" inputmode="numeric" placeholder="--">
+          <span class="muted">bpm</span>
+        </div>
+        <p class="setting-desc setting-result" id="setMaxUsed"></p>
+      </div>
+
+      <!-- Display -->
+      <h3 class="setting-group">Display</h3>
+      <label class="toggle"><input type="checkbox" id="setKeepAwake"> Keep the screen awake while recording</label>
+      <label class="toggle"><input type="checkbox" id="setPulse"> Heart pulse animation</label>
+      <label class="toggle"><input type="checkbox" id="setAvgLine"> Average line on the live chart</label>
+      <div class="setting setting-inline">
+        <label class="setting-label" for="setStale">Show "--" after</label>
+        <input id="setStale" type="number" min="2" max="60" step="1" inputmode="numeric">
+        <span class="muted">seconds without data</span>
+      </div>
+
+      <!-- Connection -->
+      <h3 class="setting-group">Connection</h3>
+      <div class="setting setting-inline">
+        <label class="setting-label" for="setReconnect">Auto-reconnect tries</label>
+        <input id="setReconnect" type="number" min="0" max="50" step="1" inputmode="numeric">
+        <span class="muted">0 = don't reconnect</span>
+      </div>
+      <div class="setting">
+        <label class="setting-label" for="resumeInput">Continue a restored session</label>
+        <p class="setting-desc">
+          After a page reload, pressing <strong>Connect</strong> continues the restored session if its last reading is
+          less than this many minutes old. Otherwise a new session starts. Set <strong>0</strong> to always start a new one.
+        </p>
+        <div class="setting-row">
+          <input id="resumeInput" type="number" min="0" max="1440" step="1" inputmode="numeric">
+          <span class="muted">minutes</span>
+        </div>
+      </div>
+
+      <!-- Data -->
+      <h3 class="setting-group">Data</h3>
+      <label class="toggle"><input type="checkbox" id="setSaveLocal"> Save the session on this device <span class="muted">(survives a page reload)</span></label>
+      <div class="setting">
+        <span class="setting-label">CSV separator</span>
+        <div class="choice-row">
+          <label class="choice"><input type="radio" name="setCsvSep" value=","> Comma</label>
+          <label class="choice"><input type="radio" name="setCsvSep" value=";"> Semicolon <span class="muted">(Excel with European settings)</span></label>
+        </div>
+      </div>
+      <div class="setting">
+        <button id="deleteDataBtn" class="btn danger">Delete saved data</button>
+        <p class="setting-desc">Deletes the saved session and all settings from this browser, then reloads the app.</p>
+      </div>
+
+      <p class="help-note">Settings are saved in this browser as soon as you change them.</p>
+    </div>
+  </dialog>
 
   <!-- HELP: how to enable Web Bluetooth per browser -->
   <dialog id="helpDialog" class="help" aria-labelledby="helpTitle">
@@ -225,6 +317,7 @@
     </section>
   </main>
 
+  <script src="storage.js"></script>
   <script src="app.js"></script>
   <script src="explore.js"></script>
   <script src="tooltip.js"></script>
