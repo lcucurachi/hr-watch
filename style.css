@@ -472,7 +472,14 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   .label-long { display: none; }
   .label-short { display: inline; }
   .status { order: 3; flex-basis: 100%; }
-  .stats { grid-template-columns: repeat(2, 1fr); }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+  /* slim stat boxes (Graph Mode and Explore): label and value on one line */
+  .stat {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    padding: 7px 12px; border-radius: 12px;
+  }
+  .stat-label { font-size: 11px; }
+  .stat-value { font-size: 19px; margin-top: 0; }
   .tabs { width: 100%; }
   .tab { flex: 1; padding: 8px 6px; white-space: nowrap; font-size: 13px; }
 }
